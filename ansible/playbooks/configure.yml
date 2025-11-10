@@ -1,0 +1,67 @@
+-hosts: webservers
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Install Nginx on web servers (Ubuntu-based)
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Debian' and ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Ensure Nginx service is running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+    - name: install nodejs on web servers (Ubuntu-based)
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Debian' and ansible_facts['distribution'] == 'Ubuntu'
+    - name: install npm on web servers (Ubuntu-based)
+      ansible.builtin.apt:
+        name: npm
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Debian' and ansible_facts['distribution'] == 'Ubuntu'
+    - name : clone github repo
+      ansible.builtin.git:
+        repo: 'https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring.git'
+        dest: /home/ubuntu/Mern_DeploymentAndMonitoring
+        version: HEAD
+    - name: install npm packages
+      ansible.builtin.command: npm install
+      args:
+        chdir: /home/ubuntu/Mern_DeploymentAndMonitoring/backend 
+        chdir: /home/ubuntu/Mern_DeploymentAndMonitoring/frontend
+    -name: add the env file
+      ansible.builtin.copy:
+        dest: /home/ubuntu/Mern_DeploymentAndMonitoring/backend/.env
+        content: |
+          PORT=5000
+          MONGO_URI=mongodb://dbservers:27017/mernapp
+    
+    - name: start nodejs server
+      ansible.builtin.command: npm start &
+      args:
+        chdir: /home/ubuntu/Mern_DeploymentAndMonitoring/frontend
+- hosts: dbservers
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Install MongoDB on db servers (Ubuntu-based)
+      ansible.builtin.apt:
+        name: mongodb
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Debian' and ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Ensure MongoDB service is running
+      ansible.builtin.service:
+        name: mongodb
+        state: started
+        enabled: true
