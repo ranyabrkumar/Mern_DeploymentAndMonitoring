@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const promClient = require('prom-client');
 const { collectDefaultMetrics, Counter, Histogram, register } = require('prom-client');
 
 const app = express();
