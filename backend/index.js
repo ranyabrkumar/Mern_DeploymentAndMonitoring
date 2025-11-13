@@ -58,12 +58,17 @@ app.get('/hello', (req, res) => {
 // --- Prometheus metrics endpoint ---
 app.get('/metrics', async (req, res) => {
   try {
-    res.set('Content-Type', register.contentType);
-    res.end(await register.metrics());
+    res.set('Content-Type', promClient.register.contentType);
+    const metrics = typeof promClient.register.metrics === 'function'
+      ? await Promise.resolve(promClient.register.metrics())
+      : promClient.register.metrics;
+    res.end(metrics);
   } catch (err) {
+    console.error('Metrics error:', err);
     res.status(500).end(err.message);
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`Server started at http://localhost:${PORT}`);
