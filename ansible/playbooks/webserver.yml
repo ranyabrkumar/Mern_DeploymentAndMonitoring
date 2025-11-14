@@ -1,0 +1,129 @@
+- name: Setup and deploy MERN web application
+  hosts: web
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Install Nginx on Ubuntu
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Debian' and ansible_facts['distribution'] == 'Ubuntu'
+
+    - name: Ensure Nginx is running
+      service:
+        name: nginx
+        state: started
+        enabled: true
+    - name: Configure Nginx as reverse proxy for MERN app and Prometheus metrics
+      copy:
+        dest: /etc/nginx/sites-available/mern_app
+        content: |
+          server {
+              listen 3000;
+              server_name _;
+
+              location / {
+                  proxy_pass http://localhost:3000;  # React frontend (default dev server)
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              location /api/ {
+                  proxy_pass http://localhost:3001/;  # Backend API
+              }
+
+              location /metrics {
+                  proxy_pass http://localhost:3001/metrics;  # Prometheus metrics
+              }
+          }
+
+          server {
+              listen 9216;
+              server_name _;
+
+              location /metrics {
+                  proxy_pass http://localhost:9216/metrics;
+              }
+          }
+
+    - name: Enable Nginx site and restart
+      file:
+        src: /etc/nginx/sites-available/mern_app
+        dest: /etc/nginx/sites-enabled/mern_app
+        state: link
+        force: yes
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+
+    - name: Install Node.js and npm
+      apt:
+        name:
+          - nodejs
+          - npm
+        state: present
+        update_cache: yes
+
+    - name: Clone MERN app repo
+      git:
+        repo: 'https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring.git'
+        dest: /home/ubuntu/Mern_DeploymentAndMonitoring
+        version: main
+        force: yes
+
+    - name: Install backend dependencies
+      command: npm install
+      args:
+        chdir: /home/ubuntu/Mern_DeploymentAndMonitoring/backend
+
+    - name: Install frontend dependencies
+      command: npm install
+      args:
+        chdir: /home/ubuntu/Mern_DeploymentAndMonitoring/frontend
+
+    - name: Add backend .env file
+      copy:
+        dest: /home/ubuntu/Mern_DeploymentAndMonitoring/backend/.env
+        content: |
+          PORT=3001
+          MONGO_URI=mongodb://{{ hostvars['db'].ansible_host | default('44.245.234.170') }}:27017/mernapp
+
+    - name: Change the owner of the application directory
+      file:
+        path: /home/ubuntu/Mern_DeploymentAndMonitoring/frontend
+        owner: ubuntu
+        group: ubuntu
+        recurse: yes
+
+    - name: Remove .cache folder to fix permission issues
+      file:
+        path: /home/ubuntu/Mern_DeploymentAndMonitoring/frontend/node_modules/.cache
+        state: absent
+    - name: Change the owner of the application directory
+      file:
+        path: /home/ubuntu/Mern_DeploymentAndMonitoring/backend
+        owner: ubuntu
+        group: ubuntu
+        recurse: yes
+
+    - name: Remove .cache folder to fix permission issues
+      file:
+        path: /home/ubuntu/Mern_DeploymentAndMonitoring/backend/node_modules/.cache
+        state: absent
+
+    - name: Start backend server
+      shell: nohup node index.js > backend.log 2>&1 &
+      args:
+        chdir: /home/ubuntu/Mern_DeploymentAndMonitoring/backend
+
+    - name: Start frontend (React) app
+      shell: nohup npm run start -- --no-cache > frontend.log 2>&1 &
+      args:
+        chdir: /home/ubuntu/Mern_DeploymentAndMonitoring/frontend

@@ -1,0 +1,158 @@
+---
+- name: Setup and deploy Prometheus server
+  hosts: web
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Install Prometheus
+      apt:
+        name: prometheus
+        state: present
+        update_cache: yes
+
+    - name: Ensure Prometheus is running
+      service:
+        name: prometheus
+        state: started
+        enabled: true
+
+    - name: Configure Prometheus to monitor MERN app and MongoDB
+      copy:
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'mern_app_backend'
+              static_configs:
+                - targets: ['{{ hostvars["web1"].ansible_host }}:3001']
+
+            - job_name: 'mongodb_exporter'
+              static_configs:
+                - targets: ['{{ hostvars["db1"].ansible_host }}:9216']
+
+
+
+    - name: Restart Prometheus to apply new configuration
+      service:
+        name: prometheus
+        state: restarted
+
+
+- name: Setup MongoDB Exporter with user
+  hosts: db
+  become: yes
+  gather_facts: yes
+
+  vars:
+    mongodb_exporter_version: "0.40.0"
+    mongodb_exporter_port: 9216
+    mongodb_uri_user: "exporter"
+    mongodb_uri_pass: "exporterpass"
+    mongodb_host: "localhost"   # Replace if MongoDB is on another server
+    mongodb_port: 27017
+
+  tasks:
+
+    - name: Install dependencies
+      apt:
+        name:
+          - wget
+          - tar
+        state: present
+        update_cache: yes
+
+    - name: Create system user for MongoDB exporter
+      user:
+        name: mongodb_exporter
+        system: yes
+        shell: /usr/sbin/nologin
+        comment: "User for MongoDB Exporter"
+
+    - name: Download MongoDB exporter binary
+      get_url:
+        url: "https://github.com/percona/mongodb_exporter/releases/download/v{{ mongodb_exporter_version }}/mongodb_exporter-{{ mongodb_exporter_version }}.linux-amd64.tar.gz"
+        dest: /tmp/mongodb_exporter.tar.gz
+
+    - name: Extract exporter
+      unarchive:
+        src: /tmp/mongodb_exporter.tar.gz
+        dest: /usr/local/bin/
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+      notify: Set permissions on exporter binary
+
+    - name: Ensure exporter binary is executable
+      file:
+        path: /usr/local/bin/mongodb_exporter
+        owner: mongodb_exporter
+        group: mongodb_exporter
+        mode: '0755'
+
+    - name: Create MongoDB user for exporter
+      shell: |
+        mongosh "mongodb://{{ mongodb_host }}:{{ mongodb_port }}/admin" --eval '
+        try {
+          db.getSiblingDB("admin").createUser({
+            user: "{{ mongodb_uri_user }}",
+            pwd: "{{ mongodb_uri_pass }}",
+            roles: [{ role: "readAnyDatabase", db: "admin" }]
+          });
+          print("User created")
+        } catch(e) {
+          if (e.codeName == "DuplicateKey") { print("User already exists") } else { throw e }
+        }'
+      register: create_user_result
+      ignore_errors: yes
+
+
+    - name: Create systemd service for MongoDB exporter
+      copy:
+        dest: /etc/systemd/system/mongodb_exporter.service
+        content: |
+          [Unit]
+          Description=MongoDB Exporter for Prometheus
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/local/bin/mongodb_exporter \
+            --mongodb.uri="mongodb://admin:admin@{{ mongodb_host }}:{{ mongodb_port }}/admin" \
+            --web.listen-address=:{{ mongodb_exporter_port }}
+          Restart=always
+          User=mongodb_exporter
+          Group=mongodb_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+
+    - name: Ensure port {{ mongodb_exporter_port }} is allowed in UFW
+      ufw:
+        rule: allow
+        port: "{{ mongodb_exporter_port }}"
+      ignore_errors: yes
+
+  handlers:
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Start MongoDB exporter service
+      systemd:
+        name: mongodb_exporter
+        state: started
+        enabled: yes
+
+    - name: Set permissions on exporter binary
+      file:
+        path: /usr/local/bin/mongodb_exporter
+        owner: mongodb_exporter
+        group: mongodb_exporter
+        mode: '0755'

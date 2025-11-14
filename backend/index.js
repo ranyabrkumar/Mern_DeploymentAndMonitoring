@@ -1,62 +1,67 @@
+
 const express = require('express');
 const cors = require('cors');
+const promClient = require('prom-client'); // <-- Prometheus client
 require('dotenv').config();
-const promClient = require('prom-client');
-const { collectDefaultMetrics, Counter, Histogram, register } = require('prom-client');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
 const conn = require('./conn');
+const tripRoutes = require('./routes/trip.routes');
 
 app.use(express.json());
 app.use(cors());
 
-// --- Metrics setup ---
-collectDefaultMetrics(); // collects CPU, memory, event loop, etc.
+// ---- Prometheus Metrics Setup ---- //
+const collectDefaultMetrics = promClient.collectDefaultMetrics;
+collectDefaultMetrics(); // Collect Node.js process metrics (CPU, memory, etc.)
 
-const httpRequestDuration = new Histogram({
-  name: 'http_request_duration_seconds',
-  help: 'Duration of HTTP requests in seconds',
-  labelNames: ['method', 'route', 'code'],
-  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5],
-});
-
-const httpRequestsTotal = new Counter({
+// Custom metrics
+const httpRequestCounter = new promClient.Counter({
   name: 'http_requests_total',
   help: 'Total number of HTTP requests',
-  labelNames: ['method', 'route', 'code'],
+  labelNames: ['method', 'route', 'status']
 });
 
-const httpErrorCount = new Counter({
-  name: 'http_error_count',
-  help: 'Number of HTTP errors',
-  labelNames: ['method', 'route', 'code'],
+const httpRequestDuration = new promClient.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [0.1, 0.3, 0.5, 1, 3, 5] // latency buckets
 });
 
-// Middleware to measure request latency and error count
+const httpErrorCounter = new promClient.Counter({
+  name: 'http_errors_total',
+  help: 'Total number of failed HTTP requests',
+  labelNames: ['method', 'route', 'status']
+});
+
+// Middleware to record metrics
 app.use((req, res, next) => {
   const end = httpRequestDuration.startTimer();
   res.on('finish', () => {
     const route = req.route ? req.route.path : req.path;
-    httpRequestsTotal.labels(req.method, route, res.statusCode).inc();
-    end({ method: req.method, route, code: res.statusCode });
+    const status = res.statusCode;
+    httpRequestCounter.inc({ method: req.method, route, status });
 
-    if (res.statusCode >= 400) {
-      httpErrorCount.labels(req.method, route, res.statusCode).inc();
+    if (status >= 400) {
+      httpErrorCounter.inc({ method: req.method, route, status });
     }
+
+    end({ method: req.method, route, status });
   });
   next();
 });
 
-// Routes
-const tripRoutes = require('./routes/trip.routes');
-app.use('/trip', tripRoutes);
+// ---- App Routes ---- //
+app.use('/trip', tripRoutes); // http://localhost:3001/trip --> POST/GET/GET by ID
 
 app.get('/hello', (req, res) => {
   res.send('Hello World!');
 });
 
-// --- Prometheus metrics endpoint ---
+// ---- Prometheus Metrics Endpoint ---- //
 app.get('/metrics', async (req, res) => {
   try {
     res.set('Content-Type', promClient.register.contentType);
@@ -71,6 +76,7 @@ app.get('/metrics', async (req, res) => {
 });
 
 
+// ---- Start Server ---- //
 app.listen(PORT, () => {
   console.log(`Server started at http://localhost:${PORT}`);
 });

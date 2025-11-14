@@ -1,0 +1,121 @@
+---
+- name: Setup MongoDB Database Server (Native Install)
+  hosts: db
+  become: yes
+  vars:
+    mongo_admin_user: "admin"
+    mongo_admin_pass: "admin"
+    mongo_app_user: "appuser"
+    mongo_app_pass: "appsecret"
+    mongo_db_name: "mernapp"
+
+  tasks:
+    - name: Import MongoDB public GPG key
+      ansible.builtin.shell: |
+        curl -fsSL https://pgp.mongodb.com/server-7.0.asc | \
+        gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+      args:
+        creates: /usr/share/keyrings/mongodb-server-7.0.gpg
+
+    - name: Add MongoDB repository
+      ansible.builtin.shell: |
+        echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
+        https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
+        tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+      args:
+        creates: /etc/apt/sources.list.d/mongodb-org-7.0.list
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install MongoDB packages
+      ansible.builtin.apt:
+        name: mongodb-org
+        state: present
+
+    - name: Enable and start MongoDB service
+      ansible.builtin.systemd:
+        name: mongod
+        state: started
+        enabled: yes
+
+    - name: Wait for MongoDB service to be available
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 27017
+        delay: 5
+        timeout: 60
+
+    - name: Allow remote connections (bindIp 0.0.0.0)
+      ansible.builtin.lineinfile:
+        path: /etc/mongod.conf
+        regexp: '^ *bindIp:'
+        line: '  bindIp: 0.0.0.0'
+        backrefs: yes
+
+    - name: Restart MongoDB after bindIp change
+      ansible.builtin.systemd:
+        name: mongod
+        state: restarted
+
+    - name: Create admin user
+      ansible.builtin.shell: |
+        mongosh --eval '
+          db = db.getSiblingDB("admin");
+          db.createUser({
+            user: "{{ mongo_admin_user }}",
+            pwd: "{{ mongo_admin_pass }}",
+            roles: [
+            { role: "root", db: "admin" },
+            { role: "readWrite", db: "{{ mongo_db_name }}" }
+            ]
+          });
+        '
+      register: create_admin_user
+      failed_when: false
+      changed_when: "'already exists' not in create_admin_user.stdout"
+
+    - name: Create application database user
+      ansible.builtin.shell: |
+        mongosh -u {{ mongo_admin_user }} -p {{ mongo_admin_pass }} --authenticationDatabase admin --eval '
+          db = db.getSiblingDB("{{ mongo_db_name }}");
+          db.createUser({
+            user: "{{ mongo_app_user }}",
+            pwd: "{{ mongo_app_pass }}",
+            roles: [{ role: "readWrite", db: "{{ mongo_db_name }}" }]
+          });
+        '
+      register: create_app_user
+      failed_when: false
+      changed_when: "'already exists' not in create_app_user.stdout"
+
+    - name: Allow SSH and MongoDB ports using UFW
+      block:
+        - name: Ensure UFW installed
+          apt:
+            name: ufw
+            state: present
+            update_cache: yes
+
+        - name: Enable UFW
+          ufw:
+            state: enabled
+          ignore_errors: yes
+
+        - name: Allow port 22 (SSH)
+          ufw:
+            rule: allow
+            port: '22'
+            proto: tcp
+
+        - name: Allow port 27017 (MongoDB)
+          ufw:
+            rule: allow
+            port: '27017'
+            proto: tcp
+        - name: Allow port 9216 (MongoDB exporter)
+          ufw:
+            rule: allow
+            port: '9216'
+            proto: tcp

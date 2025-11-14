@@ -1,0 +1,70 @@
+---
+- name: Install and configure Grafana on web server
+  hosts: web
+  become: yes
+  vars:
+    grafana_port: 5000   # <-- Change this to your preferred port
+
+  tasks:
+    - name: Install dependencies for Grafana
+      apt:
+        name:
+          - apt-transport-https
+          - software-properties-common
+          - wget
+          - gnupg
+        state: present
+        update_cache: yes
+
+    - name: Create Grafana keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Grafana GPG key
+      ansible.builtin.shell: |
+        wget -q -O - https://apt.grafana.com/gpg.key | \
+        gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
+      args:
+        creates: /etc/apt/keyrings/grafana.gpg
+
+    - name: Add Grafana APT repository
+      ansible.builtin.shell: |
+        echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | \
+        tee /etc/apt/sources.list.d/grafana.list
+      args:
+        creates: /etc/apt/sources.list.d/grafana.list
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Grafana
+      apt:
+        name: grafana
+        state: present
+
+    - name: Change Grafana default HTTP port
+      lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;*http_port ='
+        line: "http_port = {{ grafana_port }}"
+        state: present
+        backup: yes
+
+    - name: Enable and start Grafana service
+      systemd:
+        name: grafana-server
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Ensure Grafana service is running
+      systemd:
+        name: grafana-server
+        state: started
+
+    - name: Display Grafana access URL
+      debug:
+        msg: "Grafana is running at http://{{ ansible_host }}:{{ grafana_port }} (login: admin / admin)"
