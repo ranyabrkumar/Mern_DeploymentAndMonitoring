@@ -29,4 +29,9 @@ Data format to be added:
 For frontend, you need to create `.env` file and put the following content (remember to change it based on your requirements):
 ```bash
 REACT_APP_BACKEND_URL=http://localhost:3001
+
+
+
+### Monitoring Assignment
+[Monitoring Readme file](https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring/blob/main/Monitoring_README.md)
 ```
