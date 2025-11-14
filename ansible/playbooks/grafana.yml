@@ -59,6 +59,30 @@
         state: started
         enabled: yes
         daemon_reload: yes
+        
+    - name: Configure Grafana SMTP for email alerts
+      hosts: web
+      become: yes
+      tasks:
+        - name: Ensure grafana.ini has SMTP settings
+          blockinfile:
+            path: /etc/grafana/grafana.ini
+            marker: "# {mark} ANSIBLE MANAGED SMTP CONFIG"
+            block: |
+              [smtp]
+              enabled = true
+              host = smtp.gmail.com:587
+              user = ranyabrkumar@gmail.com
+              password = dzqlpwsrgmmahuah
+              skip_verify = true
+              from_address = ranyabrkumar@gmail.com
+              from_name = Grafana Alerts
+              startTLS_policy = OpportunisticStartTLS
+
+    - name: Restart Grafana after SMTP update
+      service:
+        name: grafana-server
+        state: restarted
 
     - name: Ensure Grafana service is running
       systemd:

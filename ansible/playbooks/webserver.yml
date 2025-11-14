@@ -93,7 +93,7 @@
         dest: /home/ubuntu/Mern_DeploymentAndMonitoring/backend/.env
         content: |
           PORT=3001
-          MONGO_URI=mongodb://{{ hostvars['db'].ansible_host | default('44.245.234.170') }}:27017/mernapp
+          MONGO_URI=mongodb://{{ hostvars['db'][0].ansible_host | default('44.245.234.170') }}:27017/mernapp
 
     - name: Change the owner of the application directory
       file:
