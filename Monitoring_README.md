@@ -31,6 +31,7 @@ dashboards & alerting.
 -   Route table for internet
 -   Security groups for web & db
 -   Terraform outputs show public IPs
+-   [Main.tf](https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring/blob/main/IaC/main.tf)
 - <img width="931" height="116" alt="image" src="https://github.com/user-attachments/assets/71893729-1551-4881-921d-0e0f6ab17938" />
 
 ## 2. Server Configuration -- Ansible
@@ -41,6 +42,8 @@ dashboards & alerting.
 -   Configure environment variables
 -   Setup MongoDB
 -   Configure Prometheus, Grafana, MongoDB Exporter
+-   [dbserver.yml](https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring/blob/main/ansible/playbooks/dbserver.yml)
+-   [webserver.yml](https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring/blob/main/ansible/playbooks/webserver.yml)
 
 ## 3. Observability (Prometheus)
 
@@ -51,15 +54,17 @@ Backend Metrics:
   <p align="center">
   <img src="https://github.com/user-attachments/assets/2b880009-7887-461a-807c-b32cea8b3653" width="700"/>
   <img src="https://github.com/user-attachments/assets/f985f96a-01b1-47df-9153-b4e2af058ef0" width="700"/>
-</p>
+  </p>
 
+  
 MongoDB Metrics via Exporter
 
     /metrics endpoint enabled
 <p align="center">
   <img src="https://github.com/user-attachments/assets/f3ff30c4-b584-4529-b716-21e62dfd51a4" width="700"/>  
 </p>
-
+- [prometheus.yml](https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring/blob/main/ansible/playbooks/prometheus.yml)
+  
 ## 4. Grafana Dashboards
 
 Dashboards for: - Backend metrics - MongoDB performance - System metrics
@@ -81,7 +86,7 @@ issues
  <img src="https://github.com/user-attachments/assets/d819d28f-af4f-447a-9117-998a45dda0f6" width="700"/>
  <img src="https://github.com/user-attachments/assets/161df409-304e-4a59-bf53-69c8bed724ae" width="700"/>
 </p>
-
+- [Grafana.yml](https://github.com/ranyabrkumar/Mern_DeploymentAndMonitoring/blob/main/ansible/playbooks/grafana.yml)
 
 ## 5. Performance Analysis
 
