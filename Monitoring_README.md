@@ -18,11 +18,11 @@ dashboards & alerting.
 
 ##  Repository Structure
 
-    terraform/
+    IaC/
     ansible/
-    monitoring/
-    docs/
-    sample.env
+    backend/
+    frontend/
+    screenshot
 
 ##  1. Infrastructure -- Terraform
 
@@ -97,9 +97,8 @@ analyzed & fixed
 ## Sample .env (redacted)
 
     MONGO_URL=mongodb://<DB_IP>:27017/travelmemory
-    JWT_SECRET=<REDACTED>
-    PORT=3000
-    REACT_APP_API_URL=http://<WEB_IP>:3000
+    PORT=3001
+    
 
 ## Architecture Diagram
 
